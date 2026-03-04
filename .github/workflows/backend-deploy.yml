@@ -43,6 +43,7 @@ jobs:
       #      pkill -f "java -jar" || true
       #      cd /home/ubuntu/app/backend
       #      JAR_FILE=$(ls *.jar | head -n 1)
-            nohup java -jar "$JAR_FILE" --server.port=8080 > app.log 2>&1 &
+      #      nohup java -jar "$JAR_FILE" --server.port=8080 > app.log 2>&1 &
+
 
 
