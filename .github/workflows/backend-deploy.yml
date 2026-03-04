@@ -39,9 +39,10 @@ jobs:
       #    host: ${{ secrets.EC2_HOST }}
       #    username: ${{ secrets.EC2_USER }}
       #    key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            pkill -f "java -jar" || true
-            cd /home/ubuntu/app/backend
-            JAR_FILE=$(ls *.jar | head -n 1)
+      #    script: |
+      #      pkill -f "java -jar" || true
+      #      cd /home/ubuntu/app/backend
+      #      JAR_FILE=$(ls *.jar | head -n 1)
             nohup java -jar "$JAR_FILE" --server.port=8080 > app.log 2>&1 &
+
 
