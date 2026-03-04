@@ -24,23 +24,24 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew clean build -x test
 
-      - name: Copy jar to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "build/libs/*.jar"
-          target: "/home/ubuntu/app/backend"
+     # - name: Copy jar to EC2
+     #   uses: appleboy/scp-action@v0.1.7
+     #   with:
+     #     host: ${{ secrets.EC2_HOST }}
+     #     username: ${{ secrets.EC2_USER }}
+     #     key: ${{ secrets.EC2_SSH_KEY }}
+     #     source: "build/libs/*.jar"
+     #     target: "/home/ubuntu/app/backend"
 
-      - name: Restart backend on EC2
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+     # - name: Restart backend on EC2
+     #   uses: appleboy/ssh-action@v0.1.10
+     #   with:
+      #    host: ${{ secrets.EC2_HOST }}
+      #    username: ${{ secrets.EC2_USER }}
+      #    key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             pkill -f "java -jar" || true
             cd /home/ubuntu/app/backend
             JAR_FILE=$(ls *.jar | head -n 1)
             nohup java -jar "$JAR_FILE" --server.port=8080 > app.log 2>&1 &
+
