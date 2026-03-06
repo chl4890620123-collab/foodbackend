@@ -15,7 +15,7 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: "21" # 1. 프로젝트 코드와 일치하는 JDK 버전
+          java-version: "21"
           distribution: "temurin"
           cache: gradle
 
@@ -23,7 +23,6 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        # 테스트를 제외하고 실행 가능한 JAR(bootJar) 생성
         run: ./gradlew clean bootJar -x test
 
       - name: Copy JAR to EC2
@@ -45,33 +44,35 @@ jobs:
           script: |
             cd /home/ec2-user/backend
             
-            # 2. 기존 8080 포트 프로세스 확실히 종료
+            # 1. 기존 8080 포트 프로세스 확실히 종료
             sudo fuser -k 8080/tcp || true
             sleep 5
             
-            # 3. 최신 JAR로 교체
+            # 2. 최신 JAR로 교체
             mv build/libs/*.jar current.jar || mv *.jar current.jar || true
             
-            # 4. [버전/경로/보안 통합 설정]
+            # 3. [버전/경로/보안 통합 설정]
             export SPRING_PROFILES_ACTIVE=prod
-            # RDS SSL 보안 연결 필수 옵션 포함
+            # RDS SSL 보안 연결 옵션 포함
             export SPRING_DATASOURCE_URL="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true&allowPublicKeyRetrieval=true"
             export SPRING_DATASOURCE_USERNAME="${{ secrets.RDS_USERNAME }}"
             export SPRING_DATASOURCE_PASSWORD="${{ secrets.RDS_PASSWORD }}"
             export SPRING_JPA_DATABASE_PLATFORM="org.hibernate.dialect.MariaDBDialect"
             
-            # 5. 프론트엔드와 맞춘 API 경로 (필요시 활성화)
-            # export SERVER_SERVLET_CONTEXT_PATH=/api
-            
-            # 6. 기타 필수 환경변수 장착
+            # 4. 필수 환경변수 장착 (JWT, OAuth)
             export JWT_SECRET="${{ secrets.JWT_SECRET }}"
             export OAUTH_GOOGLE_CLIENT_ID="${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}"
             export OAUTH_GOOGLE_CLIENT_SECRET="${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}"
             export OAUTH_KAKAO_CLIENT_ID="${{ secrets.OAUTH_KAKAO_CLIENT_ID }}"
             export OAUTH_KAKAO_CLIENT_SECRET="${{ secrets.OAUTH_KAKAO_CLIENT_SECRET }}"
             export KAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}"
+            
+            # 5. [추가됨] 포트원 결제 관련 환경변수
             export PORTONE_STORE_ID="${{ secrets.PORTONE_STORE_ID }}"
             export PORTONE_API_SECRET="${{ secrets.PORTONE_API_SECRET }}"
+            export PORTONE_CHANNEL_KEY_KAKAO="${{ secrets.PORTONE_CHANNEL_KEY_KAKAO }}"
+            export PORTONE_CHANNEL_KEY_TOSS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS }}"
+            export PORTONE_CHANNEL_KEY_TOSS_PAYMENTS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS_PAYMENTS }}"
             
-            # 7. 메모리 제한을 두고 백그라운드 실행
+            # 6. 메모리 제한을 두고 백그라운드 실행
             nohup java -Xmx512M -jar current.jar > app.log 2>&1 &
