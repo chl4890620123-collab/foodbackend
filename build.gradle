@@ -39,47 +39,36 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
-/* --- 리액트 빌드 통합 (에러 방지 강화 버전) --- */
-// 만약 에러가 계속된다면 이 경로를 "./frontend"로 바꿔보세요 (구조에 따라 다름)
+/* --- 리액트 빌드 통합 --- */
+// 현재 build.gradle 위치에서 한 단계 위(../)에 frontend 폴더가 있어야 합니다.
 def frontendDir = "$projectDir/../frontend" 
 
 task installFrontend(type: Exec) {
-    // 경로가 존재하는지 먼저 확인하는 로직 (에러 디버깅용)
     doFirst {
         if (!file(frontendDir).exists()) {
-            throw new GradleException("프론트엔드 폴더를 찾을 수 없습니다: " + file(frontendDir).absolutePath)
+            throw new GradleException("에러: " + file(frontendDir).absolutePath + " 경로에 frontend 폴더가 없습니다. 폴더명을 확인하세요.")
         }
     }
     workingDir "$frontendDir"
     group = "Frontend"
-    
-    // 환경변수 PATH를 참조하여 npm 실행력을 높임
-    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
-        commandLine "npm.cmd", "install"
-    } else {
-        commandLine "npm", "install"
-    }
+    executable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+    args = ['install']
 }
 
 task buildFrontend(type: Exec) {
     dependsOn "installFrontend"
     workingDir "$frontendDir"
     group = "Frontend"
-    
-    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
-        commandLine "npm.cmd", "run", "build"
-    } else {
-        commandLine "npm", "run", "build"
-    }
+    executable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+    args = ['run', 'build']
 }
 
 task copyReactBuildFiles(type: Copy) {
     dependsOn "buildFrontend"
-    // Vite 사용 시 'dist', 일반 React 사용 시 'build' 폴더인 경우가 많습니다. 확인 필요!
+    // 빌드 결과물이 저장되는 폴더명 확인 (dist 또는 build)
     from "$frontendDir/dist" 
     into "$projectDir/src/main/resources/static"
 }
-/* -------------------------------------- */
 
 jar { enabled = false }
 
