@@ -32,7 +32,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "build/libs/*.jar"
-          target: "/home/ec2-user"
+          target: "/home/ec2-user/temp_deploy" # 임시 폴더로 안전하게 전송
           strip_components: 2
 
       - name: Deploy to EC2
@@ -44,26 +44,21 @@ jobs:
           script: |
             # 1. 기존 프로세스 종료
             sudo fuser -k 8080/tcp || true
-            sleep 3
+            sleep 2
             
-            # 2. 폴더 정리 및 파일 이동
+            # 2. 폴더 생성
             mkdir -p /home/ec2-user/backend
-            rm -f /home/ec2-user/backend/current.jar
             
-            # [수정된 부분] 파일 존재 여부 확인 로직 보강
-            if ls /home/ec2-user/*.jar 1> /dev/null 2>&1; then
-              mv /home/ec2-user/*.jar /home/ec2-user/backend/current.jar
-              echo "File moved successfully"
-            else
-              echo "No jar file found in /home/ec2-user"
-            fi
+            # 3. [핵심] 파일 찾기 및 이동 (어디 있든 backend/current.jar로 집합)
+            # 임시 폴더나 홈 폴더에 있는 모든 jar를 찾아서 이동시킵니다.
+            find /home/ec2-user -name "*.jar" -exec mv {} /home/ec2-user/backend/current.jar \;
             
-            # 3. 권한 설정 (Nginx 및 실행 파일)
+            # 4. 권한 설정
             sudo chmod 711 /home/ec2-user
             sudo chmod -R 755 /home/ec2-user/hanspoon
-            [ -f /home/ec2-user/backend/current.jar ] && chmod 755 /home/ec2-user/backend/current.jar
+            chmod 755 /home/ec2-user/backend/current.jar
             
-            # 4. 백엔드 실행
+            # 5. 백엔드 실행
             nohup java -jar /home/ec2-user/backend/current.jar \
               --spring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul" \
               --spring.datasource.username="${{ secrets.RDS_USERNAME }}" \
@@ -77,3 +72,6 @@ jobs:
               --PORTONE_STORE_ID="${{ secrets.PORTONE_STORE_ID }}" \
               --PORTONE_API_SECRET="${{ secrets.PORTONE_API_SECRET }}" \
               > /home/ec2-user/backend/app.log 2>&1 &
+            
+            # 6. 뒷정리
+            rm -rf /home/ec2-user/temp_deploy
