@@ -1,87 +1,75 @@
-plugins {
-    id 'java'
-    id 'org.springframework.boot' version '3.5.10'
-    id 'io.spring.dependency-management' version '1.1.7'
-}
+name: Backend CI-CD
 
-group = 'com.project'
-version = '0.0.1-SNAPSHOT'
-description = 'hanspoon'
+on:
+  push:
+    branches: [ "main" ]
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
 
-repositories {
-    mavenCentral()
-}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
-    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
-    implementation 'org.modelmapper:modelmapper:3.2.6'
-    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
-    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.3'
-    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.3'
-    implementation 'io.github.cdimascio:dotenv-java:3.0.0'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-}
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+          cache: gradle
 
-/* --- 리액트 빌드 통합 (수정 완료 버전) --- */
-// 이미지 확인 결과, 백엔드 폴더 바로 위(..)가 프론트엔드 루트입니다.
-def frontendDir = file("${projectDir}/..").absolutePath [cite: 2026-03-07]
+      # Node.js가 있어야 Gradle이 npm build를 수행할 수 있습니다.
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "./package-lock.json" [cite: 2026-03-07]
 
-task installFrontend(type: Exec) {
-    doFirst {
-        println "----------------------------------------------------"
-        println "현재 백엔드 프로젝트 경로: ${projectDir}"
-        println "프론트엔드(저장소 루트) 경로: ${frontendDir}"
-        println "----------------------------------------------------"
-        if (!file(frontendDir).exists()) {
-            throw new GradleException("경로를 찾을 수 없습니다: ${frontendDir}")
-        }
-    }
-    workingDir frontendDir
-    group = "Frontend"
-    executable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
-    // package.json의 의존성 충돌 방지를 위해 옵션 추가
-    args = ['install', '--legacy-peer-deps'] [cite: 2026-03-07]
-}
+      - name: Grant execute permission for gradlew
+        run: chmod +x backend/gradlew [cite: 2026-03-06]
 
-task buildFrontend(type: Exec) {
-    dependsOn "installFrontend"
-    workingDir frontendDir
-    group = "Frontend"
-    executable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
-    args = ['run', 'build']
-}
+      - name: Build with Gradle
+        working-directory: ./backend [cite: 2026-03-06]
+        run: ./gradlew clean bootJar -x test
 
-task copyReactBuildFiles(type: Copy) {
-    dependsOn "buildFrontend"
-    // Vite 빌드 결과물(dist) 폴더에서 파일을 가져옵니다.
-    from "${frontendDir}/dist" [cite: 2026-03-07]
-    into "${projectDir}/src/main/resources/static" [cite: 2026-03-06]
-}
+      - name: Copy JAR to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "backend/build/libs/*.jar" [cite: 2026-03-07]
+          target: "/home/ec2-user/backend"
+          strip_components: 3
 
-jar { enabled = false }
-
-bootJar {
-    dependsOn "copyReactBuildFiles"
-    archiveFileName = 'hanspoon.jar' [cite: 2026-03-07]
-}
-
-clean {
-    delete "${projectDir}/src/main/resources/static"
-}
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ec2-user/backend
+            sudo fuser -k 8080/tcp || true
+            sleep 3
+            mv *.jar current.jar || true
+            
+            nohup java -Xmx512M \
+              -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT:3306 }}/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust" \
+              -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
+              -Dspring.datasource.password="${{ secrets.RDS_PASSWORD }}" \
+              -Dfile.upload-dir="/home/ec2-user/hanspoon_images/" \
+              -DJWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              -DKAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}" \
+              -DOAUTH_GOOGLE_CLIENT_ID="${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}" \
+              -DOAUTH_GOOGLE_CLIENT_SECRET="${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}" \
+              -DOAUTH_KAKAO_CLIENT_ID="${{ secrets.OAUTH_KAKAO_CLIENT_ID }}" \
+              -DOAUTH_KAKAO_CLIENT_SECRET="${{ secrets.OAUTH_KAKAO_CLIENT_SECRET }}" \
+              -DPORTONE_STORE_ID="${{ secrets.PORTONE_STORE_ID }}" \
+              -DPORTONE_API_SECRET="${{ secrets.PORTONE_API_SECRET }}" \
+              -DPORTONE_CHANNEL_KEY_KAKAO="${{ secrets.PORTONE_CHANNEL_KEY_KAKAO }}" \
+              -DPORTONE_CHANNEL_KEY_TOSS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS }}" \
+              -DPORTONE_CHANNEL_KEY_TOSS_PAYMENTS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS_PAYMENTS }}" \
+              -jar current.jar > app.log 2>&1 &
