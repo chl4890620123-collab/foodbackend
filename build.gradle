@@ -1,5 +1,3 @@
-// build.gradle 전체 코드
-
 plugins {
     id 'java'
     id 'org.springframework.boot' version '3.5.10'
@@ -41,22 +39,25 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
-/* --- 리액트 빌드 통합 (경로 에러 해결 버전) --- */
-// $projectDir 기준으로 상위 폴더의 frontend를 절대 경로로 찾습니다.
-def frontendDir = file("${projectDir}/../frontend").absolutePath
+/* --- 리액트 빌드 통합 (수정 완료 버전) --- */
+// 이미지 확인 결과, 백엔드 폴더 바로 위(..)가 프론트엔드 루트입니다.
+def frontendDir = file("${projectDir}/..").absolutePath [cite: 2026-03-07]
 
 task installFrontend(type: Exec) {
     doFirst {
-        println "현재 작업 중인 백엔드 경로: ${projectDir}"
-        println "찾으려는 프론트엔드 경로: ${frontendDir}"
+        println "----------------------------------------------------"
+        println "현재 백엔드 프로젝트 경로: ${projectDir}"
+        println "프론트엔드(저장소 루트) 경로: ${frontendDir}"
+        println "----------------------------------------------------"
         if (!file(frontendDir).exists()) {
-            throw new GradleException("프론트엔드 폴더가 없습니다. 경로를 확인하세요: ${frontendDir}")
+            throw new GradleException("경로를 찾을 수 없습니다: ${frontendDir}")
         }
     }
     workingDir frontendDir
     group = "Frontend"
     executable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
-    args = ['install']
+    // package.json의 의존성 충돌 방지를 위해 옵션 추가
+    args = ['install', '--legacy-peer-deps'] [cite: 2026-03-07]
 }
 
 task buildFrontend(type: Exec) {
@@ -69,16 +70,16 @@ task buildFrontend(type: Exec) {
 
 task copyReactBuildFiles(type: Copy) {
     dependsOn "buildFrontend"
-    // Vite 빌드 결과물인 dist를 복사합니다.
-    from "${frontendDir}/dist" 
-    into "${projectDir}/src/main/resources/static"
+    // Vite 빌드 결과물(dist) 폴더에서 파일을 가져옵니다.
+    from "${frontendDir}/dist" [cite: 2026-03-07]
+    into "${projectDir}/src/main/resources/static" [cite: 2026-03-06]
 }
 
 jar { enabled = false }
 
 bootJar {
     dependsOn "copyReactBuildFiles"
-    archiveFileName = 'hanspoon.jar'
+    archiveFileName = 'hanspoon.jar' [cite: 2026-03-07]
 }
 
 clean {
