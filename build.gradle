@@ -39,7 +39,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
-// [핵심 수정] 백엔드 폴더의 상위(..)가 리액트가 있는 루트입니다.
+// [핵심] 이미지 구조상 package.json이 루트에 있으므로 백엔드의 부모 폴더(..)를 지정합니다.
 def frontendDir = file("${projectDir}/..").absolutePath
 
 task installFrontend(type: Exec) {
@@ -59,7 +59,6 @@ task buildFrontend(type: Exec) {
 
 task copyReactBuildFiles(type: Copy) {
     dependsOn "buildFrontend"
-    // 루트의 dist 폴더에서 파일을 가져와 백엔드 static으로 복사
     from "${frontendDir}/dist"
     into "${projectDir}/src/main/resources/static"
 }
