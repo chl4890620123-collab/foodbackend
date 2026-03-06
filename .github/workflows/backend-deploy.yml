@@ -23,7 +23,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        # plain jar 생성을 방지하기 위해 bootJar 명령어를 직접 사용합니다.
+        # 실행 가능한 진짜 JAR(bootJar)만 만들도록 지시합니다.
         run: ./gradlew clean bootJar -x test
 
       - name: Copy JAR to EC2
@@ -32,7 +32,6 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          # 빌드 결과물 중 bootJar 하나만 서버로 전송됩니다.
           source: "build/libs/*.jar"
           target: "/home/ec2-user/backend"
           strip_components: 2
@@ -46,23 +45,23 @@ jobs:
           script: |
             cd /home/ec2-user/backend
             
-            # 1. 기존 8080 프로세스 종료
+            # 1. 기존 프로세스 종료 (8080 포트 비우기)
             sudo fuser -k 8080/tcp || true
-            sleep 2
+            sleep 5
             
-            # 2. 유령 파일 방지를 위해 기존 jar 모두 삭제 후 교체
-            # 새로 올라온 hanspoon.jar를 current.jar로 변경
+            # 2. 새로 올라온 hanspoon.jar를 서비스용인 current.jar로 교체
             if [ -f "hanspoon.jar" ]; then
                 rm -f current.jar
                 mv hanspoon.jar current.jar
             fi
             
-            # 3. 백엔드 실행 (메모리 부족 방지를 위해 -Xmx512M 설정)
+            # 3. [핵심] 성공했던 모든 옵션(SSL, Dialect, 메모리제한)을 포함하여 실행
             nohup java -Xmx512M -jar current.jar \
               --spring.profiles.active=prod \
-              --spring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul" \
+              --spring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true" \
               --spring.datasource.username="${{ secrets.RDS_USERNAME }}" \
               --spring.datasource.password="${{ secrets.RDS_PASSWORD }}" \
+              --spring.jpa.database-platform="org.hibernate.dialect.MariaDBDialect" \
               --JWT_SECRET="${{ secrets.JWT_SECRET }}" \
               --OAUTH_GOOGLE_CLIENT_ID="${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}" \
               --OAUTH_GOOGLE_CLIENT_SECRET="${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}" \
