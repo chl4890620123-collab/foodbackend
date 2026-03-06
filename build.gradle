@@ -1,3 +1,5 @@
+// build.gradle 전체 코드
+
 plugins {
     id 'java'
     id 'org.springframework.boot' version '3.5.10'
@@ -39,20 +41,19 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
-/* --- 리액트 빌드 통합 (경로 문제 해결 버전) --- */
-// $projectDir은 build.gradle이 있는 위치입니다. 
-// 현재 구조상 'foodbackend/frontend'로 접근해야 하므로 경로를 수정합니다.
-def frontendDir = file("${projectDir}/../frontend").exists() ? 
-                  "${projectDir}/../frontend" : "${projectDir}/frontend"
+/* --- 리액트 빌드 통합 (경로 에러 해결 버전) --- */
+// $projectDir 기준으로 상위 폴더의 frontend를 절대 경로로 찾습니다.
+def frontendDir = file("${projectDir}/../frontend").absolutePath
 
 task installFrontend(type: Exec) {
     doFirst {
-        println "검색된 프론트엔드 경로: " + file(frontendDir).absolutePath
+        println "현재 작업 중인 백엔드 경로: ${projectDir}"
+        println "찾으려는 프론트엔드 경로: ${frontendDir}"
         if (!file(frontendDir).exists()) {
-            throw new GradleException("에러: frontend 폴더가 없습니다. 경로를 다시 확인하세요.")
+            throw new GradleException("프론트엔드 폴더가 없습니다. 경로를 확인하세요: ${frontendDir}")
         }
     }
-    workingDir "$frontendDir"
+    workingDir frontendDir
     group = "Frontend"
     executable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
     args = ['install']
@@ -60,7 +61,7 @@ task installFrontend(type: Exec) {
 
 task buildFrontend(type: Exec) {
     dependsOn "installFrontend"
-    workingDir "$frontendDir"
+    workingDir frontendDir
     group = "Frontend"
     executable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
     args = ['run', 'build']
@@ -68,8 +69,9 @@ task buildFrontend(type: Exec) {
 
 task copyReactBuildFiles(type: Copy) {
     dependsOn "buildFrontend"
-    from "$frontendDir/dist" 
-    into "$projectDir/src/main/resources/static"
+    // Vite 빌드 결과물인 dist를 복사합니다.
+    from "${frontendDir}/dist" 
+    into "${projectDir}/src/main/resources/static"
 }
 
 jar { enabled = false }
@@ -80,5 +82,5 @@ bootJar {
 }
 
 clean {
-    delete "$projectDir/src/main/resources/static"
+    delete "${projectDir}/src/main/resources/static"
 }
