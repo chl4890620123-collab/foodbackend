@@ -27,10 +27,10 @@ jobs:
           cache-dependency-path: "./package-lock.json"
 
       - name: Grant execute permission for gradlew
+        # gradlew가 backend 폴더 안에 있는 경우를 가정합니다.
         run: chmod +x backend/gradlew
 
       - name: Build with Gradle
-        # 백엔드 폴더에서 빌드 명령어를 실행합니다.
         working-directory: ./backend
         run: ./gradlew clean bootJar -x test
 
@@ -55,10 +55,22 @@ jobs:
             sudo fuser -k 8080/tcp || true
             sleep 3
             mv *.jar current.jar || true
-            nohup java -jar current.jar \
-              -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT:3306 }}/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust" \
+            
+            # [수정] RDS_PORT 문법 에러 해결 및 환경변수 주입
+            nohup java -Xmx512M \
+              -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:3306/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust" \
               -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
               -Dspring.datasource.password="${{ secrets.RDS_PASSWORD }}" \
-              -DJWT_SECRET="${{ secrets.JWT_SECRET }}" \
               -Dfile.upload-dir="/home/ec2-user/hanspoon_images/" \
-              > app.log 2>&1 &
+              -DJWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              -DKAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}" \
+              -DOAUTH_GOOGLE_CLIENT_ID="${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}" \
+              -DOAUTH_GOOGLE_CLIENT_SECRET="${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}" \
+              -DOAUTH_KAKAO_CLIENT_ID="${{ secrets.OAUTH_KAKAO_CLIENT_ID }}" \
+              -DOAUTH_KAKAO_CLIENT_SECRET="${{ secrets.OAUTH_KAKAO_CLIENT_SECRET }}" \
+              -DPORTONE_STORE_ID="${{ secrets.PORTONE_STORE_ID }}" \
+              -DPORTONE_API_SECRET="${{ secrets.PORTONE_API_SECRET }}" \
+              -DPORTONE_CHANNEL_KEY_KAKAO="${{ secrets.PORTONE_CHANNEL_KEY_KAKAO }}" \
+              -DPORTONE_CHANNEL_KEY_TOSS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS }}" \
+              -DPORTONE_CHANNEL_KEY_TOSS_PAYMENTS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS_PAYMENTS }}" \
+              -jar current.jar > app.log 2>&1 &
