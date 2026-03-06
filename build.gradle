@@ -1,116 +1,58 @@
-plugins {
-    id 'java'
-    id 'org.springframework.boot' version '3.5.10'
-    id 'io.spring.dependency-management' version '1.1.7'
-}
+name: Hanspoon Deploy
 
-group = 'com.project'
-version = '0.0.1-SNAPSHOT'
-description = 'hanspoon'
+on:
+  push:
+    branches: [ main ] # 메인 브랜치에 푸시될 때 실행
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
+jobs:
+  build:
+    runs-on: ubuntu-latest # 빌드가 실행되는 환경
 
-repositories {
-    mavenCentral()
-}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-configurations {
-    compileOnly {
-        extendsFrom annotationProcessor
-    }
-}
+    # 1. 자바 설치 (JDK 21)
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
 
-ext {
-    querydslVersion = "5.0.0"
-}
+    # 2. 노드 설치 (리액트 빌드를 위해 필수!)
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20' # LTS 버전 권장
 
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
-    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
-    implementation 'org.modelmapper:modelmapper:3.2.6'
-    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
-    implementation "com.querydsl:querydsl-jpa:${querydslVersion}:jakarta"
-    annotationProcessor "com.querydsl:querydsl-apt:${querydslVersion}:jakarta"
-    annotationProcessor "jakarta.annotation:jakarta.annotation-api"
-    annotationProcessor "jakarta.persistence:jakarta.persistence-api"
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
-    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.3'
-    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.3'
-    implementation 'io.github.cdimascio:dotenv-java:3.0.0'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.security:spring-security-test'
-    testRuntimeOnly 'com.h2database:h2'
-}
+    # 3. Gradle 빌드 실행 (여기서 리액트 빌드와 복사가 자동으로 일어남)
+    - name: Build with Gradle
+      run: ./gradlew clean bootJar -x test
 
-/* 프론트엔드 통합 빌드 설정 */
-def frontendDir = "$projectDir/../frontend" // 리액트 폴더 경로 (프로젝트 구조에 따라 수정 가능)
+    # 4. 빌드된 JAR 파일을 EC2로 전송
+    - name: Copy JAR to EC2
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ec2-user
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "build/libs/hanspoon.jar"
+        target: "/home/ec2-user/backend"
 
-task installFrontend(type: Exec) {
-    workingDir "$frontendDir"
-    if (System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')) {
-        commandLine "npm.cmd", "install"
-    } else {
-        commandLine "npm", "install"
-    }
-}
-
-task buildFrontend(type: Exec) {
-    dependsOn "installFrontend"
-    workingDir "$frontendDir"
-    if (System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')) {
-        commandLine "npm.cmd", "run", "build"
-    } else {
-        commandLine "npm", "run", "build"
-    }
-}
-
-task copyReactBuildFiles(type: Copy) {
-    dependsOn "buildFrontend"
-    from "$frontendDir/dist" 
-    into "$projectDir/src/main/resources/static"
-}
-
-def generated = file("src/main/generated")
-
-tasks.withType(JavaCompile).configureEach {
-    options.generatedSourceOutputDirectory = generated
-}
-
-sourceSets {
-    main {
-        java {
-            srcDirs += generated
-        }
-    }
-}
-
-clean {
-    delete generated
-    delete "$projectDir/src/main/resources/static"
-}
-
-tasks.named('test') {
-    useJUnitPlatform()
-    systemProperty 'spring.profiles.active', 'test'
-}
-
-jar { enabled = false }
-
-bootJar {
-    dependsOn "copyReactBuildFiles"
-    archiveFileName = 'hanspoon.jar'
-}
+    # 5. EC2에서 서버 재시작
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ec2-user
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          sudo fuser -k 8080/tcp || true
+          nohup java -jar \
+            -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:3306/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust" \
+            -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
+            -Dspring.datasource.password="${{ secrets.RDS_PASSWORD }}" \
+            -Dkakao.rest-api-key="${{ secrets.KAKAO_REST_API_KEY }}" \
+            -Djwt.secret="${{ secrets.JWT_SECRET }}" \
+            -Dfile.upload-dir="/home/ec2-user/hanspoon_images/" \
+            /home/ec2-user/backend/build/libs/hanspoon.jar > /home/ec2-user/backend/nohup.out 2>&1 &
