@@ -23,7 +23,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        # 실행 가능한 진짜 JAR(bootJar)만 만들도록 지시합니다.
+        # 실행 가능한 JAR만 깔끔하게 만듭니다.
         run: ./gradlew clean bootJar -x test
 
       - name: Copy JAR to EC2
@@ -45,29 +45,27 @@ jobs:
           script: |
             cd /home/ec2-user/backend
             
-            # 1. 기존 프로세스 종료 (8080 포트 비우기)
+            # 1. 8080 포트에서 돌고 있는 예전 서버 강제 종료
             sudo fuser -k 8080/tcp || true
-            sleep 5
+            sleep 3
             
-            # 2. 새로 올라온 hanspoon.jar를 서비스용인 current.jar로 교체
-            if [ -f "hanspoon.jar" ]; then
-                rm -f current.jar
-                mv hanspoon.jar current.jar
-            fi
+            # 2. 방금 올린 새 파일을 current.jar로 이름 변경
+            mv build/libs/*.jar current.jar || mv *.jar current.jar || true
             
-            # 3. [핵심] 성공했던 모든 옵션(SSL, Dialect, 메모리제한)을 포함하여 실행
-            nohup java -Xmx512M -jar current.jar \
-              --spring.profiles.active=prod \
-              --spring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true" \
-              --spring.datasource.username="${{ secrets.RDS_USERNAME }}" \
-              --spring.datasource.password="${{ secrets.RDS_PASSWORD }}" \
-              --spring.jpa.database-platform="org.hibernate.dialect.MariaDBDialect" \
-              --JWT_SECRET="${{ secrets.JWT_SECRET }}" \
-              --OAUTH_GOOGLE_CLIENT_ID="${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}" \
-              --OAUTH_GOOGLE_CLIENT_SECRET="${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}" \
-              --OAUTH_KAKAO_CLIENT_ID="${{ secrets.OAUTH_KAKAO_CLIENT_ID }}" \
-              --OAUTH_KAKAO_CLIENT_SECRET="${{ secrets.OAUTH_KAKAO_CLIENT_SECRET }}" \
-              --KAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}" \
-              --PORTONE_STORE_ID="${{ secrets.PORTONE_STORE_ID }}" \
-              --PORTONE_API_SECRET="${{ secrets.PORTONE_API_SECRET }}" \
-              > app.log 2>&1 &
+            # 3. [핵심 로직 수정] 줄바꿈 때문에 증발하지 않도록 변수들을 먼저 확실하게 장착시킵니다.
+            export SPRING_PROFILES_ACTIVE=prod
+            export SPRING_DATASOURCE_URL="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul&useSSL=false&allowPublicKeyRetrieval=true"
+            export SPRING_DATASOURCE_USERNAME="${{ secrets.RDS_USERNAME }}"
+            export SPRING_DATASOURCE_PASSWORD="${{ secrets.RDS_PASSWORD }}"
+            export SPRING_JPA_DATABASE_PLATFORM="org.hibernate.dialect.MariaDBDialect"
+            export JWT_SECRET="${{ secrets.JWT_SECRET }}"
+            export OAUTH_GOOGLE_CLIENT_ID="${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}"
+            export OAUTH_GOOGLE_CLIENT_SECRET="${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}"
+            export OAUTH_KAKAO_CLIENT_ID="${{ secrets.OAUTH_KAKAO_CLIENT_ID }}"
+            export OAUTH_KAKAO_CLIENT_SECRET="${{ secrets.OAUTH_KAKAO_CLIENT_SECRET }}"
+            export KAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}"
+            export PORTONE_STORE_ID="${{ secrets.PORTONE_STORE_ID }}"
+            export PORTONE_API_SECRET="${{ secrets.PORTONE_API_SECRET }}"
+            
+            # 4. 장착된 변수들과 함께 군더더기 없이 서버 실행!
+            nohup java -Xmx512M -jar current.jar > app.log 2>&1 &
