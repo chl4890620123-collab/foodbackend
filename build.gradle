@@ -78,3 +78,12 @@ tasks.named('test') {
     useJUnitPlatform()
     systemProperty 'spring.profiles.active', 'test'
 }
+
+// [추가된 부분] 실행 불가능한 plain jar 생성을 막습니다.
+jar {
+    enabled = false
+}
+
+bootJar {
+    archiveFileName = 'hanspoon.jar'
+}
