@@ -32,7 +32,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "build/libs/*.jar"
-          target: "/home/ec2-user/temp_deploy" # 임시 폴더로 안전하게 전송
+          target: "/home/ec2-user/backend" # 백엔드 전용 폴더로 바로 전송
           strip_components: 2
 
       - name: Deploy to EC2
@@ -46,20 +46,16 @@ jobs:
             sudo fuser -k 8080/tcp || true
             sleep 2
             
-            # 2. 폴더 생성
-            mkdir -p /home/ec2-user/backend
+            # 2. 폴더 정리 및 파일 이름 통일
+            cd /home/ec2-user/backend
+            # 가장 최근에 전송된 jar 파일을 current.jar로 변경
+            mv $(ls -t *.jar | head -1) current.jar
             
-            # 3. [핵심] 파일 찾기 및 이동 (어디 있든 backend/current.jar로 집합)
-            # 임시 폴더나 홈 폴더에 있는 모든 jar를 찾아서 이동시킵니다.
-            find /home/ec2-user -name "*.jar" -exec mv {} /home/ec2-user/backend/current.jar \;
+            # 3. 백엔드 권한 설정 (프론트엔드 hanspoon 폴더는 건드리지 않음)
+            chmod 755 current.jar
             
-            # 4. 권한 설정
-            sudo chmod 711 /home/ec2-user
-            sudo chmod -R 755 /home/ec2-user/hanspoon
-            chmod 755 /home/ec2-user/backend/current.jar
-            
-            # 5. 백엔드 실행
-            nohup java -jar /home/ec2-user/backend/current.jar \
+            # 4. 백엔드 실행
+            nohup java -jar current.jar \
               --spring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul" \
               --spring.datasource.username="${{ secrets.RDS_USERNAME }}" \
               --spring.datasource.password="${{ secrets.RDS_PASSWORD }}" \
@@ -71,7 +67,4 @@ jobs:
               --KAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}" \
               --PORTONE_STORE_ID="${{ secrets.PORTONE_STORE_ID }}" \
               --PORTONE_API_SECRET="${{ secrets.PORTONE_API_SECRET }}" \
-              > /home/ec2-user/backend/app.log 2>&1 &
-            
-            # 6. 뒷정리
-            rm -rf /home/ec2-user/temp_deploy
+              > app.log 2>&1 &
