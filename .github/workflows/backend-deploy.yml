@@ -15,7 +15,7 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: "21"
+          java-version: "21" # 1. 프로젝트 코드와 일치하는 JDK 버전
           distribution: "temurin"
           cache: gradle
 
@@ -23,7 +23,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        # 실행 가능한 JAR만 깔끔하게 만듭니다.
+        # 테스트를 제외하고 실행 가능한 JAR(bootJar) 생성
         run: ./gradlew clean bootJar -x test
 
       - name: Copy JAR to EC2
@@ -45,19 +45,25 @@ jobs:
           script: |
             cd /home/ec2-user/backend
             
-            # 1. 8080 포트에서 돌고 있는 예전 서버 강제 종료
+            # 2. 기존 8080 포트 프로세스 확실히 종료
             sudo fuser -k 8080/tcp || true
-            sleep 3
+            sleep 5
             
-            # 2. 방금 올린 새 파일을 current.jar로 이름 변경
+            # 3. 최신 JAR로 교체
             mv build/libs/*.jar current.jar || mv *.jar current.jar || true
             
-            # 3. [핵심 로직 수정] 줄바꿈 때문에 증발하지 않도록 변수들을 먼저 확실하게 장착시킵니다.
+            # 4. [버전/경로/보안 통합 설정]
             export SPRING_PROFILES_ACTIVE=prod
-            export SPRING_DATASOURCE_URL="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul&useSSL=false&allowPublicKeyRetrieval=true"
+            # RDS SSL 보안 연결 필수 옵션 포함
+            export SPRING_DATASOURCE_URL="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true&allowPublicKeyRetrieval=true"
             export SPRING_DATASOURCE_USERNAME="${{ secrets.RDS_USERNAME }}"
             export SPRING_DATASOURCE_PASSWORD="${{ secrets.RDS_PASSWORD }}"
             export SPRING_JPA_DATABASE_PLATFORM="org.hibernate.dialect.MariaDBDialect"
+            
+            # 5. 프론트엔드와 맞춘 API 경로 (필요시 활성화)
+            # export SERVER_SERVLET_CONTEXT_PATH=/api
+            
+            # 6. 기타 필수 환경변수 장착
             export JWT_SECRET="${{ secrets.JWT_SECRET }}"
             export OAUTH_GOOGLE_CLIENT_ID="${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}"
             export OAUTH_GOOGLE_CLIENT_SECRET="${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}"
@@ -67,5 +73,5 @@ jobs:
             export PORTONE_STORE_ID="${{ secrets.PORTONE_STORE_ID }}"
             export PORTONE_API_SECRET="${{ secrets.PORTONE_API_SECRET }}"
             
-            # 4. 장착된 변수들과 함께 군더더기 없이 서버 실행!
+            # 7. 메모리 제한을 두고 백그라운드 실행
             nohup java -Xmx512M -jar current.jar > app.log 2>&1 &
