@@ -6,23 +6,22 @@ server:
       enabled: true
       force: true
 
-# EC2에서 배포 시에도 삭제되지 않는 고정 경로 (어제 만든 폴더)
+# EC2 고정 경로: 배포 시에도 이미지가 삭제되지 않도록 보호
 uploadPath: ${UPLOAD_PATH:file:///home/ec2-user/hanspoon_images/}
 itemImgLocation: ${ITEM_IMG_LOCATION:/home/ec2-user/hanspoon_images}
 
 spring:
   profiles:
     active: dev
-
   application:
     name: hanspoon
 
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
-    # RDS 엔드포인트에 SSL 모드 신뢰 설정을 강제 결합
-    url: jdbc:mariadb://${RDS_HOSTNAME:localhost}:${RDS_PORT:3306}/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust
-    username: ${RDS_USERNAME:root}
-    password: ${RDS_PASSWORD:1234}
+    # RDS 실 주소 및 SSL 신뢰 설정 강제 포함
+    url: jdbc:mariadb://${RDS_HOSTNAME:hanspoon-db.c3w48c6a6o4s.ap-northeast-2.rds.amazonaws.com}:${RDS_PORT:3306}/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust
+    username: ${RDS_USERNAME:admin}
+    password: ${RDS_PASSWORD:hanspoon123!}
 
   jpa:
     open-in-view: false
@@ -55,7 +54,6 @@ spring:
             scope:
               - email
               - profile
-
           kakao:
             client-id: ${OAUTH_KAKAO_CLIENT_ID}
             client-secret: ${OAUTH_KAKAO_CLIENT_SECRET}
@@ -65,7 +63,6 @@ spring:
             client-name: Kakao
             scope:
               - profile_nickname
-
         provider:
           kakao:
             authorization-uri: https://kauth.kakao.com/oauth/authorize
