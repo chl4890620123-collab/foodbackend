@@ -19,15 +19,22 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
+      # [중요] Gradle이 루트의 package.json을 읽어 리액트를 빌드하려면 Node.js가 꼭 필요합니다.
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+          # 루트에 package-lock.json이 있으므로 경로를 지정합니다.
+          cache-dependency-path: "./package-lock.json" [cite: 2026-03-07]
 
       - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+        # gradlew 파일은 보통 backend 폴더 안에 있으므로 경로를 맞춰줍니다.
+        run: chmod +x backend/gradlew [cite: 2026-03-06]
 
       - name: Build with Gradle
+        # backend 폴더로 들어가서 빌드를 실행합니다.
+        working-directory: ./backend [cite: 2026-03-06]
         run: ./gradlew clean bootJar -x test
 
       - name: Copy JAR to EC2
@@ -36,9 +43,10 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "build/libs/*.jar"
+          # 빌드된 JAR 파일의 위치를 지정합니다.
+          source: "backend/build/libs/*.jar" [cite: 2026-03-07]
           target: "/home/ec2-user/backend"
-          strip_components: 2
+          strip_components: 3 # backend/build/libs 경로를 제거하고 파일만 전송합니다.
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.10
@@ -48,10 +56,15 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ec2-user/backend
+            
+            # 1. 기존 실행 중인 프로세스 종료 (8080 포트)
             sudo fuser -k 8080/tcp || true
             sleep 3
+            
+            # 2. 파일 이름 정리
             mv *.jar current.jar || true
             
+            # 3. 새 버전 실행 (환경변수 주입)
             nohup java -Xmx512M \
               -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT:3306 }}/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust" \
               -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
