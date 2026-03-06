@@ -46,20 +46,19 @@ jobs:
             
             # 1. 기존 8080 포트 프로세스 확실히 종료
             sudo fuser -k 8080/tcp || true
-            sleep 5
+            sleep 3
             
             # 2. 최신 JAR로 교체
             mv build/libs/*.jar current.jar || mv *.jar current.jar || true
             
-            # 3. [버전/경로/보안 통합 설정]
-            export SPRING_PROFILES_ACTIVE=prod
-            # RDS SSL 보안 연결 옵션 포함
-            export SPRING_DATASOURCE_URL="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true&allowPublicKeyRetrieval=true"
-            export SPRING_DATASOURCE_USERNAME="${{ secrets.RDS_USERNAME }}"
-            export SPRING_DATASOURCE_PASSWORD="${{ secrets.RDS_PASSWORD }}"
-            export SPRING_JPA_DATABASE_PLATFORM="org.hibernate.dialect.MariaDBDialect"
+            # 3. [중요] application.yml의 변수명과 일치하게 주입
+            # 이렇게 해줘야 자바가 localhost:3308로 안 가고 RDS로 갑니다.
+            export RDS_HOSTNAME="${{ secrets.RDS_HOSTNAME }}"
+            export RDS_PORT="${{ secrets.RDS_PORT }}"
+            export RDS_USERNAME="${{ secrets.RDS_USERNAME }}"
+            export RDS_PASSWORD="${{ secrets.RDS_PASSWORD }}"
             
-            # 4. 필수 환경변수 장착 (JWT, OAuth)
+            # 4. 필수 환경변수 (JWT, OAuth)
             export JWT_SECRET="${{ secrets.JWT_SECRET }}"
             export OAUTH_GOOGLE_CLIENT_ID="${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}"
             export OAUTH_GOOGLE_CLIENT_SECRET="${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}"
@@ -67,12 +66,12 @@ jobs:
             export OAUTH_KAKAO_CLIENT_SECRET="${{ secrets.OAUTH_KAKAO_CLIENT_SECRET }}"
             export KAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}"
             
-            # 5. [추가됨] 포트원 결제 관련 환경변수
+            # 5. 포트원 관련
             export PORTONE_STORE_ID="${{ secrets.PORTONE_STORE_ID }}"
             export PORTONE_API_SECRET="${{ secrets.PORTONE_API_SECRET }}"
             export PORTONE_CHANNEL_KEY_KAKAO="${{ secrets.PORTONE_CHANNEL_KEY_KAKAO }}"
             export PORTONE_CHANNEL_KEY_TOSS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS }}"
             export PORTONE_CHANNEL_KEY_TOSS_PAYMENTS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS_PAYMENTS }}"
             
-            # 6. 메모리 제한을 두고 백그라운드 실행
+            # 6. 실행
             nohup java -Xmx512M -jar current.jar > app.log 2>&1 &
