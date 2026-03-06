@@ -6,8 +6,9 @@ server:
       enabled: true
       force: true
 
-uploadPath: file:///c:/hanspoon/img/
-itemImgLocation: c:/hanspoon/img
+# 리눅스 환경에 맞춰 경로 수정 (환경 변수가 없으면 /home/ec2-user 경로 사용)
+uploadPath: ${UPLOAD_PATH:file:///home/ec2-user/hanspoon/img/}
+itemImgLocation: ${ITEM_IMG_LOCATION:/home/ec2-user/hanspoon/img}
 
 spring:
   profiles:
@@ -18,9 +19,10 @@ spring:
 
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
-    url: jdbc:mariadb://localhost:3308/hanspoon?serverTimezone=Asia/Seoul
-    username: root
-    password: 1234
+    # localhost:3308 대신 RDS 엔드포인트를 주입받도록 설정
+    url: jdbc:mariadb://${RDS_HOSTNAME:localhost}:${RDS_PORT:3308}/hanspoon?serverTimezone=Asia/Seoul
+    username: ${RDS_USERNAME:root}
+    password: ${RDS_PASSWORD:1234}
 
   jpa:
     open-in-view: false
@@ -89,4 +91,5 @@ portone:
     toss: ${PORTONE_CHANNEL_KEY_TOSS}
     toss-payments: ${PORTONE_CHANNEL_KEY_TOSS_PAYMENTS}
 
-kakao.rest-api-key: ${KAKAO_REST_API_KEY:}
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY}
