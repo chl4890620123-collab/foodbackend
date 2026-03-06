@@ -24,26 +24,33 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew clean build -x test
 
-     # - name: Copy jar to EC2
-     #   uses: appleboy/scp-action@v0.1.7
-     #   with:
-     #     host: ${{ secrets.EC2_HOST }}
-     #     username: ${{ secrets.EC2_USER }}
-     #     key: ${{ secrets.EC2_SSH_KEY }}
-     #     source: "build/libs/*.jar"
-     #     target: "/home/ubuntu/app/backend"
+      # 1. 빌드된 JAR 파일을 EC2로 전송 (주석 해제 및 경로 수정)
+      - name: Copy jar to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user  # Amazon Linux 기본 계정
+          key: ${{ secrets.EC2_SSH_KEY }}
+          # build/libs 폴더에서 plain이 붙지 않은 실행 가능한 jar만 선택
+          source: "build/libs/*.jar"
+          target: "/home/ec2-user/backend"
+          strip_components: 2
 
-     # - name: Restart backend on EC2
-     #   uses: appleboy/ssh-action@v0.1.10
-     #   with:
-      #    host: ${{ secrets.EC2_HOST }}
-      #    username: ${{ secrets.EC2_USER }}
-      #    key: ${{ secrets.EC2_SSH_KEY }}
-      #    script: |
-      #      pkill -f "java -jar" || true
-      #      cd /home/ubuntu/app/backend
-      #      JAR_FILE=$(ls *.jar | head -n 1)
-      #      nohup java -jar "$JAR_FILE" --server.port=8080 > app.log 2>&1 &
-
-
-
+      # 2. EC2에서 백엔드 재시작 (주석 해제 및 실행 스크립트 최적화)
+      - name: Restart backend on EC2
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # 기존에 실행 중인 자바 프로세스 종료 (없어도 에러 안 나게 true 처리)
+            sudo pkill -f "java -jar" || true
+            
+            cd /home/ec2-user/backend
+            
+            # -plain.jar 파일을 제외한 실제 실행 파일을 찾음
+            JAR_FILE=$(ls *.jar | grep -v "plain" | head -n 1)
+            
+            # 백그라운드 실행 및 로그 저장
+            nohup java -jar "$JAR_FILE" --server.port=8080 > app.log 2>&1 &
