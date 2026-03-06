@@ -26,6 +26,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
+        # 수정한 build.gradle을 사용하여 JAR 빌드
         run: ./gradlew clean build -x test
 
       - name: Copy JAR to EC2
@@ -45,12 +46,15 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            mkdir -p /home/ec2-user/backend
+            # 8080 포트 종료 (서버 psmisc 패키지 사용)
             sudo fuser -k 8080/tcp || true
             sleep 5
+            
+            mkdir -p /home/ec2-user/backend
             rm -f /home/ec2-user/backend/current.jar
             mv /home/ec2-user/backend_temp/*.jar /home/ec2-user/backend/current.jar
             
+            # RDS 및 모든 환경 변수 주입 실행
             nohup java -jar /home/ec2-user/backend/current.jar \
               --spring.datasource.url=jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul \
               --spring.datasource.username=${{ secrets.RDS_USERNAME }} \
