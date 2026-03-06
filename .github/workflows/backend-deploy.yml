@@ -27,7 +27,6 @@ jobs:
           cache-dependency-path: "./package-lock.json"
 
       - name: Grant execute permission for gradlew
-        # gradlew가 backend 폴더 안에 있는 경우를 가정합니다.
         run: chmod +x backend/gradlew
 
       - name: Build with Gradle
@@ -56,7 +55,6 @@ jobs:
             sleep 3
             mv *.jar current.jar || true
             
-            # [수정] RDS_PORT 문법 에러 해결 및 환경변수 주입
             nohup java -Xmx512M \
               -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:3306/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust" \
               -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
