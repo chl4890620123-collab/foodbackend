@@ -39,14 +39,17 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
-/* --- 리액트 빌드 통합 --- */
-// 현재 build.gradle 위치에서 한 단계 위(../)에 frontend 폴더가 있어야 합니다.
-def frontendDir = "$projectDir/../frontend" 
+/* --- 리액트 빌드 통합 (경로 문제 해결 버전) --- */
+// $projectDir은 build.gradle이 있는 위치입니다. 
+// 현재 구조상 'foodbackend/frontend'로 접근해야 하므로 경로를 수정합니다.
+def frontendDir = file("${projectDir}/../frontend").exists() ? 
+                  "${projectDir}/../frontend" : "${projectDir}/frontend"
 
 task installFrontend(type: Exec) {
     doFirst {
+        println "검색된 프론트엔드 경로: " + file(frontendDir).absolutePath
         if (!file(frontendDir).exists()) {
-            throw new GradleException("에러: " + file(frontendDir).absolutePath + " 경로에 frontend 폴더가 없습니다. 폴더명을 확인하세요.")
+            throw new GradleException("에러: frontend 폴더가 없습니다. 경로를 다시 확인하세요.")
         }
     }
     workingDir "$frontendDir"
@@ -65,7 +68,6 @@ task buildFrontend(type: Exec) {
 
 task copyReactBuildFiles(type: Copy) {
     dependsOn "buildFrontend"
-    // 빌드 결과물이 저장되는 폴더명 확인 (dist 또는 build)
     from "$frontendDir/dist" 
     into "$projectDir/src/main/resources/static"
 }
