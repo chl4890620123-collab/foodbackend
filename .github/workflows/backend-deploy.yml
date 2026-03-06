@@ -43,11 +43,18 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # 폴더가 없으면 생성
+            mkdir -p /home/ec2-user/backend
+            
             # 8080 포트를 사용하는 기존 프로세스 종료
             sudo fuser -k 8080/tcp || true
             
+            # 이전 JAR 파일 삭제 (중복 실행 방지)
+            rm -f /home/ec2-user/backend/old-*.jar
+            mv /home/ec2-user/backend/*.jar /home/ec2-user/backend/current.jar || true
+            
             # 새 JAR 파일 실행 (로그는 app.log에 기록)
-            nohup java -jar /home/ec2-user/backend/*.jar \
+            nohup java -jar /home/ec2-user/backend/current.jar \
               --spring.datasource.url=jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul \
               --spring.datasource.username=${{ secrets.RDS_USERNAME }} \
               --spring.datasource.password=${{ secrets.RDS_PASSWORD }} \
