@@ -39,21 +39,14 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
-/* --- 리액트 빌드 통합 (루트 경로 버전) --- */
-// 현재 백엔드 폴더 기준 상위 폴더(..)가 리액트 소스가 있는 루트입니다.
-def frontendDir = file("${projectDir}/..").absolutePath [cite: 2026-03-07]
+// [핵심 수정] 백엔드 폴더의 상위(..)가 리액트가 있는 루트입니다.
+def frontendDir = file("${projectDir}/..").absolutePath
 
 task installFrontend(type: Exec) {
-    doFirst {
-        println "----------------------------------------------------"
-        println "프론트엔드(루트) 경로 확인: ${frontendDir}"
-        println "----------------------------------------------------"
-    }
     workingDir frontendDir
     group = "Frontend"
     executable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
-    // 버전 충돌 방지를 위해 legacy-peer-deps 옵션을 사용합니다.
-    args = ['install', '--legacy-peer-deps'] [cite: 2026-03-07]
+    args = ['install', '--legacy-peer-deps']
 }
 
 task buildFrontend(type: Exec) {
@@ -66,16 +59,16 @@ task buildFrontend(type: Exec) {
 
 task copyReactBuildFiles(type: Copy) {
     dependsOn "buildFrontend"
-    // 루트에 생성된 dist 폴더를 백엔드 static 폴더로 복사합니다.
-    from "${frontendDir}/dist" [cite: 2026-03-07]
-    into "${projectDir}/src/main/resources/static" [cite: 2026-03-06]
+    // 루트의 dist 폴더에서 파일을 가져와 백엔드 static으로 복사
+    from "${frontendDir}/dist"
+    into "${projectDir}/src/main/resources/static"
 }
 
 jar { enabled = false }
 
 bootJar {
     dependsOn "copyReactBuildFiles"
-    archiveFileName = 'hanspoon.jar' [cite: 2026-03-07]
+    archiveFileName = 'hanspoon.jar'
 }
 
 clean {
