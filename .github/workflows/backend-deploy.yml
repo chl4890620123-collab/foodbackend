@@ -19,7 +19,7 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
-      # [핵심 수정] 리액트 빌드(npm)를 위해 Node.js 설치 단계를 반드시 추가해야 합니다.
+      # [필수] 이 단계가 있어야 gradle 빌드 중 npm 명령을 인식합니다.
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -28,7 +28,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Gradle 빌드 시 build.gradle에 작성한 리액트 통합 로직이 여기서 실행됩니다.
       - name: Build with Gradle
         run: ./gradlew clean bootJar -x test
 
@@ -50,31 +49,14 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ec2-user/backend
-            
-            # 1. 기존 8080 포트 프로세스 종료 (어제 수동으로 했던 작업 자동화)
             sudo fuser -k 8080/tcp || true
             sleep 3
-            
-            # 2. 파일 정리 (기존 jar가 있다면 백업하거나 교체)
             mv *.jar current.jar || true
-            
-            # 3. 환경변수 주입 실행
-            # -Dfile.upload-dir: 이미지가 배포 시 삭제되지 않도록 어제 만든 고정 폴더 지정
-            # &sslMode=trust: RDS 연결 시 발생하는 SSL 에러를 방지하기 위해 필수 추가
             nohup java -Xmx512M \
-              -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT }}/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust" \
+              -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:${{ secrets.RDS_PORT:3306 }}/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust" \
               -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
               -Dspring.datasource.password="${{ secrets.RDS_PASSWORD }}" \
               -Dfile.upload-dir="/home/ec2-user/hanspoon_images/" \
               -DJWT_SECRET="${{ secrets.JWT_SECRET }}" \
-              -DOAUTH_GOOGLE_CLIENT_ID="${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}" \
-              -DOAUTH_GOOGLE_CLIENT_SECRET="${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}" \
-              -DOAUTH_KAKAO_CLIENT_ID="${{ secrets.OAUTH_KAKAO_CLIENT_ID }}" \
-              -DOAUTH_KAKAO_CLIENT_SECRET="${{ secrets.OAUTH_KAKAO_CLIENT_SECRET }}" \
               -DKAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}" \
-              -DPORTONE_STORE_ID="${{ secrets.PORTONE_STORE_ID }}" \
-              -DPORTONE_API_SECRET="${{ secrets.PORTONE_API_SECRET }}" \
-              -DPORTONE_CHANNEL_KEY_KAKAO="${{ secrets.PORTONE_CHANNEL_KEY_KAKAO }}" \
-              -DPORTONE_CHANNEL_KEY_TOSS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS }}" \
-              -DPORTONE_CHANNEL_KEY_TOSS_PAYMENTS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS_PAYMENTS }}" \
               -jar current.jar > app.log 2>&1 &
