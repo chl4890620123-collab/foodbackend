@@ -1,4 +1,4 @@
-name: Backend CI/CD
+name: Backend CI-CD
 
 on:
   push:
@@ -50,15 +50,18 @@ jobs:
             mkdir -p /home/ec2-user/backend
             rm -f /home/ec2-user/backend/current.jar
             
-            # 전송된 파일을 backend 폴더로 옮기기 (파일명 상관없이 이동)
-            if [ -f /home/ec2-user/*.jar ]; then
+            # [수정된 부분] 파일 존재 여부 확인 로직 보강
+            if ls /home/ec2-user/*.jar 1> /dev/null 2>&1; then
               mv /home/ec2-user/*.jar /home/ec2-user/backend/current.jar
+              echo "File moved successfully"
+            else
+              echo "No jar file found in /home/ec2-user"
             fi
             
             # 3. 권한 설정 (Nginx 및 실행 파일)
             sudo chmod 711 /home/ec2-user
             sudo chmod -R 755 /home/ec2-user/hanspoon
-            chmod 755 /home/ec2-user/backend/current.jar
+            [ -f /home/ec2-user/backend/current.jar ] && chmod 755 /home/ec2-user/backend/current.jar
             
             # 4. 백엔드 실행
             nohup java -jar /home/ec2-user/backend/current.jar \
