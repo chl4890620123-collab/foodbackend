@@ -38,12 +38,12 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
+// 일반 jar 생성은 끄고 bootJar만 사용합니다.
 jar { enabled = false }
 
 bootJar {
+    // 파일명을 고정하면 배포 스크립트에서 관리하기 훨씬 편합니다.
     archiveFileName = 'hanspoon.jar'
 }
 
-clean {
-    delete "${projectDir}/src/main/resources/static"
-}
+// [수정] 기존의 clean 시 static 폴더를 삭제하던 로직을 제거했습니다.
