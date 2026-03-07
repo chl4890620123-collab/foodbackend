@@ -24,9 +24,23 @@ jobs:
         with:
           node-version: "20"
 
+      # [중요] 프론트엔드 빌드: React 결과물을 먼저 생성합니다.
+      - name: Build Frontend
+        working-directory: ./frontend
+        run: |
+          npm install
+          npm run build
+
+      # [중요] 통합 빌드 준비: 프론트 빌드 결과물(dist)을 백엔드 static 폴더로 복사합니다.
+      - name: Copy Frontend to Backend
+        run: |
+          mkdir -p backend/src/main/resources/static
+          cp -r frontend/dist/* backend/src/main/resources/static/
+
       - name: Grant execute permission for gradlew
         run: chmod +x backend/gradlew
 
+      # 프론트엔드 자원이 포함된 통합 JAR 생성
       - name: Build with Gradle
         working-directory: ./backend
         run: ./gradlew clean bootJar -x test
@@ -53,12 +67,12 @@ jobs:
             sleep 3
             mv *.jar current.jar || true
             
-            # RDS_PORT 에러를 막기 위해 3306을 직접 입력했습니다.
+            # [수정] 특수기호 보호를 위해 모든 주입 변수를 큰따옴표("${{ ... }}")로 감쌌습니다.
+            # RDS SSL 설정을 보다 안정적인 useSSL 옵션으로 변경했습니다.
             nohup java -Xmx512M \
-              -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:3306/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust" \
+              -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:3306/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true" \
               -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
               -Dspring.datasource.password="${{ secrets.RDS_PASSWORD }}" \
-              -Dfile.upload-dir="/home/ec2-user/hanspoon_images/" \
               -DJWT_SECRET="${{ secrets.JWT_SECRET }}" \
               -DKAKAO_REST_API_KEY="${{ secrets.KAKAO_REST_API_KEY }}" \
               -DOAUTH_GOOGLE_CLIENT_ID="${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}" \
@@ -70,4 +84,5 @@ jobs:
               -DPORTONE_CHANNEL_KEY_KAKAO="${{ secrets.PORTONE_CHANNEL_KEY_KAKAO }}" \
               -DPORTONE_CHANNEL_KEY_TOSS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS }}" \
               -DPORTONE_CHANNEL_KEY_TOSS_PAYMENTS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS_PAYMENTS }}" \
+              -Dfile.upload-dir="/home/ec2-user/hanspoon_images/" \
               -jar current.jar > app.log 2>&1 &
