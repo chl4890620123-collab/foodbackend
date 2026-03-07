@@ -24,14 +24,12 @@ jobs:
         with:
           node-version: "20"
 
-      # [필수] 프론트엔드 빌드 (npm run build)
       - name: Build Frontend
         working-directory: ./frontend
         run: |
           npm install
           npm run build
 
-      # [필수] 빌드된 리액트 파일을 백엔드 static 폴더로 복사
       - name: Copy Frontend to Backend
         run: |
           mkdir -p backend/src/main/resources/static
@@ -40,7 +38,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x backend/gradlew
 
-      # 프론트가 포함된 통합 JAR 생성 (테스트는 제외하여 속도 향상)
       - name: Build with Gradle
         working-directory: ./backend
         run: ./gradlew clean bootJar -x test
@@ -67,7 +64,6 @@ jobs:
             sleep 3
             mv *.jar current.jar || true
             
-            # [특수기호 방어] 모든 시크릿 값에 큰따옴표("")를 붙여 '!' 등의 문자가 깨지지 않게 합니다.
             nohup java -Xmx512M \
               -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:3306/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true" \
               -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
