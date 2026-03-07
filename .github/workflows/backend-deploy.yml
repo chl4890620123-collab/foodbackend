@@ -24,14 +24,14 @@ jobs:
         with:
           node-version: "20"
 
-      # [프론트 기준] 프론트엔드를 먼저 빌드하여 백엔드가 바라볼 화면을 만듭니다.
+      # 1. 프론트엔드 빌드
       - name: Build Frontend
         working-directory: frontend
         run: |
           npm install
           npm run build
 
-      # [통합] 빌드된 리액트 화면을 백엔드의 정적 리소스 경로로 복사합니다.
+      # 2. 빌드된 결과물을 백엔드 static 폴더로 복사
       - name: Copy Frontend to Backend
         run: |
           mkdir -p backend/src/main/resources/static
@@ -40,11 +40,12 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x backend/gradlew
 
-      # [백엔드 빌드] 화면이 포함된 통합 JAR를 생성합니다.
+      # 3. 백엔드 통합 빌드 (화면 포함)
       - name: Build with Gradle
         working-directory: backend
         run: ./gradlew clean bootJar -x test
 
+      # 4. EC2로 JAR 전송
       - name: Copy JAR to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -55,6 +56,7 @@ jobs:
           target: "/home/ec2-user/backend"
           strip_components: 3
 
+      # 5. EC2에서 서버 실행
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -67,8 +69,8 @@ jobs:
             sleep 3
             mv *.jar current.jar || true
             
-            # [특수기호 방어] 모든 시크릿 값에 큰따옴표("")를 붙여 '!' 등의 문자가 깨지지 않게 주입합니다.
             nohup java -Xmx512M \
+              -Dspring.profiles.active=dev \
               -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:3306/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true" \
               -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
               -Dspring.datasource.password="${{ secrets.RDS_PASSWORD }}" \
