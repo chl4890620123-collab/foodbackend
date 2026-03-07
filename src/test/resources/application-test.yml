@@ -1,10 +1,44 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+# EC2 이미지 업로드 경로
+uploadPath: "file:///home/ec2-user/hanspoon_images/"
+itemImgLocation: "/home/ec2-user/hanspoon_images"
+
 spring:
+  profiles:
+    active: dev
+  application:
+    name: hanspoon
+
   datasource:
-    url: jdbc:h2:mem:testdb
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+    driver-class-name: org.mariadb.jdbc.Driver
+    # [특수기호 방어] URL과 비밀번호는 항상 따옴표로 감싸서 주입받습니다.
+    url: "jdbc:mariadb://${RDS_HOSTNAME}:3306/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true"
+    username: "${RDS_USERNAME}"
+    password: "${RDS_PASSWORD}"
+
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MariaDBDialect
+        format_sql: true
+
+  # [프론트엔드 연결] 리액트 빌드 파일들이 있는 static 경로를 우선 바라봅니다.
+  web:
+    resources:
+      static-locations:
+        - "classpath:/static/"
+
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+jwt:
+  secret: "${JWT_SECRET}"
+
+kakao:
+  rest-api-key: "${KAKAO_REST_API_KEY}"
