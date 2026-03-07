@@ -1,64 +1,42 @@
-name: Hanspoon Deploy to EC2
+server:
+  port: ${SERVER_PORT:8080}
 
-on:
-  push:
-    branches: [ "main" ] # 본인의 메인 브랜치 이름 확인 (master 또는 main)
+uploadPath: "file:///home/ec2-user/hanspoon_images/"
+itemImgLocation: "/home/ec2-user/hanspoon_images"
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+spring:
+  profiles:
+    active: dev
+  application:
+    name: hanspoon
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+  datasource:
+    driver-class-name: org.mariadb.jdbc.Driver
+    # [수정] SSL 접속 허용 및 타임존 설정 추가
+    url: "jdbc:mariadb://${RDS_HOSTNAME}:3306/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true"
+    username: "${RDS_USERNAME}"
+    password: "${RDS_PASSWORD}"
 
-      # 1. 프론트엔드 빌드 (경로 오류 수정: ./frontend -> ./)
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
+  jpa:
+    hibernate:
+      ddl-auto: update # 데이터가 다 들어온 후에는 none으로 바꾸는 것을 추천합니다.
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MariaDBDialect
+        format_sql: true
 
-      - name: Build Frontend
-        # 프론트 파일이 루트에 흩뿌려져 있으므로 working-directory를 제거하거나 ./로 설정
-        run: |
-          npm install
-          npm run build
+  web:
+    resources:
+      static-locations:
+        - "classpath:/static/"
 
-      # 2. 백엔드 빌드 (Java 17 기준, 필요시 버전 수정)
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
 
-      - name: Build Backend with Gradle
-        run: |
-          chmod +x ./gradlew
-          ./gradlew build -x test
+jwt:
+  secret: "${JWT_SECRET}"
 
-      # 3. EC2로 파일 전송 및 실행
-      - name: Deploy to EC2
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "build/libs/*.jar"
-          target: "/home/ec2-user/hanspoon"
-          strip_components: 2
-
-      # 4. EC2에서 서버 실행 (환경변수 주입 필수!)
-      - name: Execute Server on EC2
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            sudo fuser -k 8080/tcp || true
-            nohup java -jar /home/ec2-user/hanspoon/*.jar \
-              --RDS_HOSTNAME=${{ secrets.RDS_HOSTNAME }} \
-              --RDS_USERNAME=${{ secrets.RDS_USERNAME }} \
-              --RDS_PASSWORD=${{ secrets.RDS_PASSWORD }} \
-              --JWT_SECRET=${{ secrets.JWT_SECRET }} \
-              --KAKAO_REST_API_KEY=${{ secrets.KAKAO_REST_API_KEY }} > /home/ec2-user/hanspoon/nohup.out 2>&1 &
+kakao:
+  rest-api-key: "${KAKAO_REST_API_KEY}"
