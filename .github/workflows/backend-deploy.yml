@@ -19,33 +19,16 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      # 1. 프론트엔드 빌드
-      - name: Build Frontend
-        working-directory: frontend
-        run: |
-          npm install
-          npm run build
-
-      # 2. 빌드된 결과물을 백엔드 static 폴더로 복사
-      - name: Copy Frontend to Backend
-        run: |
-          mkdir -p backend/src/main/resources/static
-          cp -r frontend/dist/* backend/src/main/resources/static/
+      # [수정] 프론트 빌드 단계를 삭제했습니다. 
+      # 이미 EC2에 파일이 있으니 백엔드만 빌드해서 보냅니다.
 
       - name: Grant execute permission for gradlew
         run: chmod +x backend/gradlew
 
-      # 3. 백엔드 통합 빌드 (화면 포함)
       - name: Build with Gradle
         working-directory: backend
         run: ./gradlew clean bootJar -x test
 
-      # 4. EC2로 JAR 전송
       - name: Copy JAR to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -56,7 +39,6 @@ jobs:
           target: "/home/ec2-user/backend"
           strip_components: 3
 
-      # 5. EC2에서 서버 실행
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -69,8 +51,10 @@ jobs:
             sleep 3
             mv *.jar current.jar || true
             
+            # [핵심] 이미 알고 있는 프론트 경로(/var/www/hanspoon)를 직접 지정합니다.
             nohup java -Xmx512M \
               -Dspring.profiles.active=dev \
+              -Dspring.web.resources.static-locations="file:/var/www/hanspoon/" \
               -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:3306/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true" \
               -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
               -Dspring.datasource.password="${{ secrets.RDS_PASSWORD }}" \
