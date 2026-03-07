@@ -24,14 +24,14 @@ jobs:
         with:
           node-version: "20"
 
-      # [중요] 프론트엔드 빌드: React 결과물을 먼저 생성합니다.
+      # 1. 프론트엔드 빌드 (vendor.js 등 정적 파일 생성)
       - name: Build Frontend
         working-directory: ./frontend
         run: |
           npm install
           npm run build
 
-      # [중요] 통합 빌드 준비: 프론트 빌드 결과물(dist)을 백엔드 static 폴더로 복사합니다.
+      # 2. 빌드 결과물을 백엔드 static 폴더로 복사 (통합 빌드의 핵심)
       - name: Copy Frontend to Backend
         run: |
           mkdir -p backend/src/main/resources/static
@@ -40,7 +40,7 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x backend/gradlew
 
-      # 프론트엔드 자원이 포함된 통합 JAR 생성
+      # 3. 백엔드 통합 JAR 생성
       - name: Build with Gradle
         working-directory: ./backend
         run: ./gradlew clean bootJar -x test
@@ -67,8 +67,9 @@ jobs:
             sleep 3
             mv *.jar current.jar || true
             
-            # [수정] 특수기호 보호를 위해 모든 주입 변수를 큰따옴표("${{ ... }}")로 감쌌습니다.
-            # RDS SSL 설정을 보다 안정적인 useSSL 옵션으로 변경했습니다.
+            # [특수기호 및 SSL 방어] 
+            # 모든 시크릿 값을 큰따옴표("${{...}}")로 감싸 쉘 실행 시 잘림 방지
+            # MariaDB 11.8 보안 기준에 맞춘 SSL 파라미터 적용
             nohup java -Xmx512M \
               -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:3306/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true" \
               -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
