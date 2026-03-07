@@ -1,49 +1,63 @@
-plugins {
-    id 'java'
-    id 'org.springframework.boot' version '3.5.10'
-    id 'io.spring.dependency-management' version '1.1.7'
-}
+name: Backend CI-CD
 
-group = 'com.project'
-version = '0.0.1-SNAPSHOT'
+on:
+  push:
+    branches: [ "main" ]
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
 
-repositories {
-    mavenCentral()
-}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
-    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
-    implementation 'org.modelmapper:modelmapper:3.2.6'
-    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
-    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.3'
-    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.3'
-    implementation 'io.github.cdimascio:dotenv-java:3.0.0'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-}
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+          cache: gradle
 
-// 일반 jar 생성은 끄고 bootJar만 사용합니다.
-jar { enabled = false }
+      # 1. 권한 부여 (backend -> foodbackend로 수정)
+      - name: Grant execute permission for gradlew
+        run: chmod +x foodbackend/gradlew
 
-bootJar {
-    // 파일명을 고정하면 배포 스크립트에서 관리하기 훨씬 편합니다.
-    archiveFileName = 'hanspoon.jar'
-}
+      # 2. 빌드 실행 (working-directory를 foodbackend로 지정)
+      - name: Build with Gradle
+        working-directory: foodbackend
+        run: ./gradlew clean bootJar -x test
 
-// [수정] 기존의 clean 시 static 폴더를 삭제하던 로직을 제거했습니다.
+      # 3. JAR 파일 전송 (source 경로 수정)
+      - name: Copy JAR to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "foodbackend/build/libs/hanspoon.jar"
+          target: "/home/ec2-user/backend"
+          strip_components: 3
+
+      # 4. EC2에서 실행
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ec2-user/backend
+            sudo fuser -k 8080/tcp || true
+            sleep 3
+            mv hanspoon.jar current.jar || true
+            
+            nohup java -Xmx512M \
+              -Dspring.profiles.active=dev \
+              -Dspring.web.resources.static-locations="file:/var/www/hanspoon/" \
+              -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:3306/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true" \
+              -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
+              -Dspring.datasource.password="${{ secrets.RDS_PASSWORD }}" \
+              -DJWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              -Dfile.upload-dir="/home/ec2-user/hanspoon_images/" \
+              -jar current.jar > app.log 2>&1 &
