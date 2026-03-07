@@ -24,12 +24,14 @@ jobs:
         with:
           node-version: "20"
 
+      # [프론트 기준] 프론트엔드를 먼저 빌드하여 백엔드가 바라볼 화면을 만듭니다.
       - name: Build Frontend
-        working-directory: ./frontend
+        working-directory: frontend
         run: |
           npm install
           npm run build
 
+      # [통합] 빌드된 리액트 화면을 백엔드의 정적 리소스 경로로 복사합니다.
       - name: Copy Frontend to Backend
         run: |
           mkdir -p backend/src/main/resources/static
@@ -38,8 +40,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x backend/gradlew
 
+      # [백엔드 빌드] 화면이 포함된 통합 JAR를 생성합니다.
       - name: Build with Gradle
-        working-directory: ./backend
+        working-directory: backend
         run: ./gradlew clean bootJar -x test
 
       - name: Copy JAR to EC2
@@ -64,6 +67,7 @@ jobs:
             sleep 3
             mv *.jar current.jar || true
             
+            # [특수기호 방어] 모든 시크릿 값에 큰따옴표("")를 붙여 '!' 등의 문자가 깨지지 않게 주입합니다.
             nohup java -Xmx512M \
               -Dspring.datasource.url="jdbc:mariadb://${{ secrets.RDS_HOSTNAME }}:3306/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true" \
               -Dspring.datasource.username="${{ secrets.RDS_USERNAME }}" \
@@ -76,8 +80,5 @@ jobs:
               -DOAUTH_KAKAO_CLIENT_SECRET="${{ secrets.OAUTH_KAKAO_CLIENT_SECRET }}" \
               -DPORTONE_STORE_ID="${{ secrets.PORTONE_STORE_ID }}" \
               -DPORTONE_API_SECRET="${{ secrets.PORTONE_API_SECRET }}" \
-              -DPORTONE_CHANNEL_KEY_KAKAO="${{ secrets.PORTONE_CHANNEL_KEY_KAKAO }}" \
-              -DPORTONE_CHANNEL_KEY_TOSS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS }}" \
-              -DPORTONE_CHANNEL_KEY_TOSS_PAYMENTS="${{ secrets.PORTONE_CHANNEL_KEY_TOSS_PAYMENTS }}" \
               -Dfile.upload-dir="/home/ec2-user/hanspoon_images/" \
               -jar current.jar > app.log 2>&1 &
