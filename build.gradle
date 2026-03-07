@@ -39,12 +39,14 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
-/* --- 리액트 빌드 통합 --- */
-def frontendDir = file("${projectDir}/..").absolutePath
+/* --- 로컬(윈도우) 리액트 빌드 통합 --- */
+// 윈도우 환경에 맞춰 경로 인식 방식을 더 안전하게 바꿨습니다.
+def frontendDir = "${projectDir}/../frontend"
 
 task installFrontend(type: Exec) {
     workingDir frontendDir
     group = "Frontend"
+    // 로컬 윈도우는 npm.cmd, EC2는 npm을 써야 하는 분기 처리
     executable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
     args = ['install', '--legacy-peer-deps']
 }
@@ -63,12 +65,13 @@ task copyReactBuildFiles(type: Copy) {
     into "${projectDir}/src/main/resources/static"
 }
 
-jar { enabled = false }
-
+// 로컬에서 bootJar 빌드 시 프론트엔드 파일을 static에 포함시킵니다.
 bootJar {
     dependsOn "copyReactBuildFiles"
     archiveFileName = 'hanspoon.jar'
 }
+
+jar { enabled = false }
 
 clean {
     delete "${projectDir}/src/main/resources/static"
