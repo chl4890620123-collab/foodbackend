@@ -6,9 +6,9 @@ server:
       enabled: true
       force: true
 
-# EC2 고정 경로: 배포 시에도 이미지가 삭제되지 않도록 보호
-uploadPath: ${UPLOAD_PATH:file:///home/ec2-user/hanspoon_images/}
-itemImgLocation: ${ITEM_IMG_LOCATION:/home/ec2-user/hanspoon_images}
+# EC2 고정 경로 (로컬과 EC2 환경을 모두 고려하여 따옴표 처리)
+uploadPath: "${UPLOAD_PATH:file:///home/ec2-user/hanspoon_images/}"
+itemImgLocation: "${ITEM_IMG_LOCATION:/home/ec2-user/hanspoon_images}"
 
 spring:
   profiles:
@@ -16,12 +16,20 @@ spring:
   application:
     name: hanspoon
 
+  # [추가] 빌드 시 프론트엔드(React) 결과물을 인식하기 위한 설정
+  web:
+    resources:
+      static-locations:
+        - "classpath:/static/"
+        - "file:./dist/"
+
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
-    # RDS 실 주소 및 SSL 신뢰 설정 강제 포함
-    url: jdbc:mariadb://${RDS_HOSTNAME:hanspoon-db.c3w48c6a6o4s.ap-northeast-2.rds.amazonaws.com}:${RDS_PORT:3306}/hanspoon?serverTimezone=Asia/Seoul&sslMode=trust
-    username: ${RDS_USERNAME:admin}
-    password: ${RDS_PASSWORD:hanspoon123!}
+    # [수정] URL 전체를 따옴표로 감싸 특수문자 오류 방지
+    url: "jdbc:mariadb://${RDS_HOSTNAME:hanspoon-db.c3w48c6a6o4s.ap-northeast-2.rds.amazonaws.com}:${RDS_PORT:3306}/hanspoon?serverTimezone=Asia/Seoul&useSSL=true&trustServerCertificate=true"
+    username: "${RDS_USERNAME:admin}"
+    # [핵심 수정] 항상 빼먹었던 특수기호(!) 보호를 위해 반드시 따옴표 처리를 합니다.
+    password: "${RDS_PASSWORD:hanspoon123!}"
 
   jpa:
     open-in-view: false
@@ -31,6 +39,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        dialect: org.hibernate.dialect.MariaDBDialect
 
   servlet:
     multipart:
@@ -49,14 +58,14 @@ spring:
       client:
         registration:
           google:
-            client-id: ${OAUTH_GOOGLE_CLIENT_ID}
-            client-secret: ${OAUTH_GOOGLE_CLIENT_SECRET}
+            client-id: "${OAUTH_GOOGLE_CLIENT_ID}"
+            client-secret: "${OAUTH_GOOGLE_CLIENT_SECRET}"
             scope:
               - email
               - profile
           kakao:
-            client-id: ${OAUTH_KAKAO_CLIENT_ID}
-            client-secret: ${OAUTH_KAKAO_CLIENT_SECRET}
+            client-id: "${OAUTH_KAKAO_CLIENT_ID}"
+            client-secret: "${OAUTH_KAKAO_CLIENT_SECRET}"
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
             authorization-grant-type: authorization_code
             client-authentication-method: client_secret_post
@@ -77,16 +86,18 @@ logging:
     org.hibernate.type.descriptor.sql: warn
 
 jwt:
-  secret: ${JWT_SECRET:mySecretKeyForJwtTokenGenerationMustBe256BitsLong}
+  # 특수문자가 섞인 시크릿 키 보호
+  secret: "${JWT_SECRET:mySecretKeyForJwtTokenGenerationMustBe256BitsLong}"
   expiration: ${JWT_EXPIRATION:86400000}
 
 portone:
-  store-id: ${PORTONE_STORE_ID}
-  api-secret: ${PORTONE_API_SECRET}
+  store-id: "${PORTONE_STORE_ID}"
+  api-secret: "${PORTONE_API_SECRET}"
   channel-key:
-    kakao: ${PORTONE_CHANNEL_KEY_KAKAO}
-    toss: ${PORTONE_CHANNEL_KEY_TOSS}
-    toss-payments: ${PORTONE_CHANNEL_KEY_TOSS_PAYMENTS}
+    kakao: "${PORTONE_CHANNEL_KEY_KAKAO}"
+    toss: "${PORTONE_CHANNEL_KEY_TOSS}"
+    toss-payments: "${PORTONE_CHANNEL_KEY_TOSS_PAYMENTS}"
 
 kakao:
-  rest-api-key: ${KAKAO_REST_API_KEY}
+  # 빈 값으로 인한 BeanCreationException 방지
+  rest-api-key: "${KAKAO_REST_API_KEY:your-key}"
